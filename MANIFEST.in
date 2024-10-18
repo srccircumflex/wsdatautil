@@ -1,0 +1,4 @@
+include LICENSE
+include src/wsdatautil/py.typed
+include src/wsdatautil/_wsframecoder.c
+include src/wsdatautil/_wsframecoder.pyi

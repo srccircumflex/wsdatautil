@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wsdatautil"
+authors = [
+    {name = "Adrian F. Hoefflin", email = "srccircumflex@outlook.com"},
+]
+description = "The WsDataUtil is a lightweight, highly compatible Python module to process WebSocket data."
+requires-python = ">=3.9"
+readme = {file = "README.rst", content-type = "text/x-rst"}
+keywords = [
+    "ws", "wss", "websocket", "websocket protocol", "python c extension",
+    "websocket encode", "websocket parser", "websocket frame parser", "websocket frame"
+]
+license = { text = "MIT" }
+classifiers = [
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C"
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/srccircumflex/wsdatautil"
+
+[tool.setuptools.dynamic]
+version = {attr = "wsdatautil.__version__"}
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "universal2", "arm64"]
+[tool.cibuildwheel.linux]
+archs = ["auto", "aarch64"]

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Test WsDataUtil</title>
+</head>
+<body>
+<script>
+let socket = new WebSocket("ws://localhost:7890");
+socket.onopen = function(e) {
+  alert("Connection established. Sending to server ...");
+  console.log(e);
+  socket.send("Hello WsDataUtil!");
+}
+socket.onmessage = function(event) {
+  console.log(event);
+  alert(`Received from server: ${event.data}`);
+}
+socket.onclose = function(event) {
+  console.log(event);
+  if (event.wasClean) {
+    alert(`Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+  } else {
+    alert('[ Connection died ]');
+  }
+}
+socket.onerror = function(error) {
+  console.log(error);
+  alert(`[ error ]`);
+}
+</script>
+</body>
+</html>

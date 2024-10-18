@@ -1,0 +1,63 @@
+name: Make release
+
+on:
+  release:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  sdist:
+    name: Build source distribution and architecture-independent wheel
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+    - name: Install Python 3.x
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: Install build
+      run: pip install build
+    - name: Build sdist & wheel
+      run: python -m build
+      env:
+        BUILD_EXTENSION: 0
+    - name: Save sdist & wheel
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-architecture-independent
+        path: |
+          dist/*.tar.gz
+          dist/*.whl
+
+  wheels:
+    name: Build architecture-specific wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+    - name: Install Python 3.x
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.x
+    - name: Set up QEMU
+      if: runner.os == 'Linux'
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: all
+    - name: Build wheels
+      uses: pypa/cibuildwheel@v2.20.0
+      env:
+        BUILD_EXTENSION: 1
+    - name: Save wheels
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-${{ matrix.os }}
+        path: wheelhouse/*.whl
