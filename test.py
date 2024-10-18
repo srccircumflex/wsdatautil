@@ -8,7 +8,7 @@ from sys import argv
 from time import perf_counter_ns
 
 from wsdatautil import _wsframecoder
-from wsdatautil import Frame, OPCODES, CLOSECODES
+from wsdatautil import Frame, OPCODES, CLOSECODES, StreamReader
 from wsdatautil import get_close_code_and_message_from_frame
 from wsdatautil import HandshakeRequest
 
@@ -438,9 +438,15 @@ if __name__ == '__main__':
                     print(">", ln)
                 con.send(response.to_streamdata())
 
-                msg = con.recv(1024)
-                print("# Message received:")
-                print("<", Frame.from_streamdata(msg))
+                sr = StreamReader(payloads_masked=True)
+
+                for _ in range(2):
+                    val = 2
+                    while isinstance(val, int):
+                        val = sr.progressive_read(con.recv(val))
+
+                    print("# Message received:")
+                    print("<", val)
 
                 print("# Send message:")
                 msg = Frame(b"Hello World!", mask=b"")

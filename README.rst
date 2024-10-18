@@ -4,7 +4,7 @@ WsDataUtil (WebSocket Data Util)
 The WsDataUtil is a lightweight, highly compatible Python module to process WebSocket data.
 The parsing, building and masking of WebSocket frames is implemented in C to increase performance.
 
-The core of the module is the ``Frame`` object as an interface to the C api.
+The core of the module is the ``Frame`` and the ``StreamReader`` object as an interface to the C api.
 This serves as the result value from parsing and as the parameter for building a WebSocket frame.
 A frame is not checked for plausibility or according to the specification RFC6455.
 This should be implemented later if required.

@@ -231,6 +231,16 @@ static PyObject * parse(PyObject *self, PyObject *args) {
         goto exit;
     }
 
+    uint64_t _header_offset = 2;
+    
+    if ((uint64_t)i_len < _header_offset) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "invalid frame: data length < 2"
+        );
+        goto exit;
+    }
+
     unsigned char *_input = (unsigned char *)i_data;
 
     char _b1 = _input[0];
@@ -243,16 +253,6 @@ static PyObject * parse(PyObject *self, PyObject *args) {
     int      masked      = (_b2 & 0b10000000) >> 7;
     int      amount_spec = (_b2 & 0b01111111);
     uint64_t amount;
-
-    uint64_t _header_offset = 2;
-    
-    if ((uint64_t)i_len < _header_offset) {
-        PyErr_Format(
-            PyExc_ValueError,
-            "invalid frame: data length < 2"
-        );
-        goto exit;
-    }
     
     if (amount_spec == 126) {
         amount =  (uint64_t)_input[2];
@@ -327,7 +327,164 @@ exit:
 
 
 
+static PyObject * read_header(PyObject *self, PyObject *args) {
+    PyObject   *i_obj;
+    Py_ssize_t  i_len;
+    char       *i_data;
+
+    PyObject *o_obj = NULL;
+    
+    if (!PyArg_ParseTuple(args, "O", &i_obj))
+    {
+        goto exit;
+    }
+
+    if (PyBytes_AsStringAndSize(i_obj, &i_data, &i_len) == -1) {
+        goto exit;
+    }
+    
+    if ((uint64_t)i_len != 2) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "invalid header: data length != 2"
+        );
+        goto exit;
+    }
+    
+    unsigned char *_input = (unsigned char *)i_data;
+
+    char _b1 = _input[0];
+    int      fin         = (_b1 & 0b10000000) >> 7;
+    int      rsv1        = (_b1 & 0b01000000) >> 6;
+    int      rsv2        = (_b1 & 0b00100000) >> 5;
+    int      rsv3        = (_b1 & 0b00010000) >> 4;
+    int      opcode      = (_b1 & 0b00001111);
+    char _b2 = _input[1];
+    int      masked      = (_b2 & 0b10000000) >> 7;
+    int      amount_spec = (_b2 & 0b01111111);
+
+    int      header_continuation = 0;
+    
+    if (amount_spec == 126) {
+        header_continuation += 2;
+    } else if (amount_spec == 127) {
+        header_continuation += 8;
+    }
+    
+    if (masked) {
+        header_continuation += 4;
+    }
+
+    o_obj = Py_BuildValue(
+        "(i,i,i,i,i,i,i,i)",
+        fin, rsv1, rsv2, rsv3, opcode, masked, amount_spec, header_continuation
+    );
+
+exit:
+    return o_obj;
+}
+
+
+
+static PyObject * read_header_continuation(PyObject *self, PyObject *args) {
+    PyObject   *i_obj;
+    Py_ssize_t  i_len;
+    char       *i_data;
+    int         i_amount_spec;
+    int         i_masked;
+
+    char     *o_mask = NULL;
+    PyObject *o_obj = NULL;
+    
+    if (!PyArg_ParseTuple(args, "Oip", &i_obj, &i_amount_spec, &i_masked))
+    {
+        goto exit;
+    }
+
+    if (PyBytes_AsStringAndSize(i_obj, &i_data, &i_len) == -1) {
+        goto exit;
+    }
+
+    unsigned char *_input = (unsigned char *)i_data;
+
+    uint64_t _header_size = 0;
+    
+    uint64_t amount;
+
+    if (i_amount_spec == 126) {
+        amount =  (uint64_t)_input[2];
+        amount <<= 8;
+        amount |= (uint64_t)_input[3];
+        _header_size += 2;
+    } else if (i_amount_spec == 127) {
+        amount =  (uint64_t)_input[2];
+        amount <<= 8;
+        amount |= (uint64_t)_input[3];
+        amount <<= 8;
+        amount |= (uint64_t)_input[4];
+        amount <<= 8;
+        amount |= (uint64_t)_input[5];
+        amount <<= 8;
+        amount |= (uint64_t)_input[6];
+        amount <<= 8;
+        amount |= (uint64_t)_input[7];
+        amount <<= 8;
+        amount |= (uint64_t)_input[8];
+        amount <<= 8;
+        amount |= (uint64_t)_input[9];
+        _header_size += 8;
+    } else {
+        amount = i_amount_spec;
+    }
+    
+    o_mask = (char*)malloc(4 * sizeof(char));
+    if (o_mask == NULL) {
+        PyErr_Format(
+            PyExc_SystemError,
+            "Memory allocation failed"
+        );
+        goto exit;
+    };
+    if (i_masked) {
+        memcpy(o_mask, _input + _header_size, 4);
+        _header_size += 4;
+    }
+
+    if ((uint64_t)i_len != _header_size) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "invalid header: data length (%d) != expected data length (%d)",
+            i_len, _header_size
+        );
+        goto exit;
+    }
+    
+    
+    o_obj = Py_BuildValue(
+        "(y#,i)",
+        o_mask, 4, amount
+    );
+
+exit:
+    free(o_mask);
+    return o_obj;
+}
+
+
+
 static PyMethodDef wsframecoder_meth[] = {
+    {
+        "read_header",
+        (PyCFunction)read_header,
+        METH_VARARGS,
+        "read a WebSocket header <- (<two-bytes>) -> (fin, rsv1, rsv2, rsv3, opcode, masked, amount_spec, header_continuation)",
+    },
+    {
+        "read_header_continuation",
+        (PyCFunction)read_header_continuation,
+        METH_VARARGS,
+        "read a WebSocket header continuation <- (<header-continuation-bytes>, amount_spec, masked) -> (mask, amount)",
+    },
     {
         "parse",
         (PyCFunction)parse,

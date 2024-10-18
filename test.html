@@ -10,7 +10,8 @@ let socket = new WebSocket("ws://localhost:7890");
 socket.onopen = function(e) {
   alert("Connection established. Sending to server ...");
   console.log(e);
-  socket.send("Hello WsDataUtil!");
+  socket.send("Hello...");
+  socket.send("WsDataUtil!");
 }
 socket.onmessage = function(event) {
   console.log(event);

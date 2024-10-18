@@ -2,7 +2,7 @@
 The WsDataUtil is a lightweight, highly compatible Python module for processing WebSocket data.
 The parsing, building and masking of WebSocket frames is implemented in C to increase performance.
 
-The core of the module is the <Frame> object as an interface to the C api.
+The core of the module is the ``Frame`` and the ``StreamReader`` object as an interface to the C api.
 This serves as the result value from parsing and as the parameter for building a WebSocket frame.
 A frame is not checked for plausibility or according to the specification RFC6455.
 This should be implemented later if required.
@@ -12,7 +12,7 @@ For the sake of completeness, the <HandshakeRequest> object is available.
 
 from __future__ import annotations
 
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, Generator, Callable
 from base64 import b64encode
 from collections import OrderedDict
 from hashlib import sha1
@@ -21,7 +21,7 @@ from uuid import uuid4
 from . import _wsframecoder
 
 
-__version__ = "0.1"
+__version__ = "0.2"
 
 
 def _make_accept_key(b64key: bytes):
@@ -317,7 +317,167 @@ class Frame(NamedTuple):
         return _wsframecoder.masking(self.payload, self.mask or b"")
 
 
+class ProgressiveStreamReader:
+    """
+    This object serves as a container for progressively read data from the stream.
+
+    The constructor accepts an argument that defines whether the payload data in the stream is masked.
+
+    The steps:
+
+        - First, the first two bytes (frame header) must be read in:
+            ``read_header`` or an iteration of ``progressive_read``
+                the call returns the amount of the next expected bytes
+        - Next, the extended header is to be read in:
+            ``read_header_continuation`` or an iteration of ``progressive_read``
+                the call returns the amount of the next expected bytes
+        - Finally, the payload is read in and a ``Frame`` object is returned.
+            ``make_frame`` or an iteration of ``progressive_read``
+    """
+    opcode: int
+    mask: bytes | None
+    fin: Literal[0, 1] | int
+    rsv1: Literal[0, 1] | int
+    rsv2: Literal[0, 1] | int
+    rsv3: Literal[0, 1] | int
+    amount_spec: Literal[126, 127] | int
+    amount: int
+    masked: bool
+    header_continuation: int
+
+    def read_header(self, two_bytes: bytes) -> int:
+        """Read a WebSocket frame header without continuation.
+
+        returns: the number of bytes of the header continuation
+        """
+        (
+            fin,
+            rsv1,
+            rsv2,
+            rsv3,
+            opcode,
+            masked,
+            amount_spec,
+            header_continuation,
+        ) = _wsframecoder.read_header(two_bytes)
+        self.fin = fin
+        self.rsv1 = rsv1
+        self.rsv2 = rsv2
+        self.rsv3 = rsv3
+        self.opcode = opcode
+        self.masked = True if masked & 1 else False
+        self.amount_spec = amount_spec
+        self.header_continuation = header_continuation
+        if not header_continuation:
+            self.amount = self.amount_spec
+            self.mask = None
+        return self.header_continuation
+
+    def read_header_continuation(self, continuation_data: bytes) -> int:
+        """Read a WebSocket frame header continuation without.
+
+        returns: the number of bytes of the payload
+        """
+        (
+            mask,
+            amount
+        ) = _wsframecoder.read_header_continuation(continuation_data, self.amount_spec, self.masked)
+        self.mask = mask
+        self.amount = amount
+        return self.amount
+
+    _make_frame_: Callable[[bytes], Frame]
+
+    def make_frame(self, payload: bytes) -> Frame:
+        """Create a frame from the current local values.
+        """
+        return self._make_frame_(payload)
+
+    def _progress(self) -> Generator[int | Frame, bytes, None]:
+        first_two_bytes: bytes = yield
+        if con := self.read_header(first_two_bytes):
+            yield con
+            con_dat: bytes = yield
+            yield self.read_header_continuation(con_dat)
+        else:
+            yield self.amount
+        payload: bytes = yield
+        yield self.make_frame(payload)
+
+    _progressive_read_: Generator[int | Frame, bytes, None]
+
+    def progressive_read(self, data: bytes) -> int | Frame:
+        """Can be used to progressively read in the stream data.
+        Returns the number of the next expected number of bytes or a Frame.
+        The method can be reused throughout (the values of ProgressiveStreamReader are continuously overwritten).
+
+        Example::
+
+            psr = ProgressiveStreamReader(payloads_masked=True)
+            while stream.is_alive:
+                val = 2
+                while isinstance(val, int):
+                    val = psr.progressive_read(stream.readn(val))
+                ...
+        """
+        next(self._progressive_read_)
+        val = self._progressive_read_.send(data)
+        if not isinstance(val, int):
+            self._progressive_read_.close()
+            self._progressive_read_ = self._progress()
+        return val
+
+    def __init__(
+            self,
+            payloads_masked: bool | Literal["auto"]
+    ):
+        self._progressive_read_ = self._progress()
+        if payloads_masked == "auto":
+            def _make_frame(payload: bytes):
+                if self.mask:
+                    payload = Frame(payload, mask=self.mask).masked_payload()
+                return Frame(
+                    payload,
+                    self.opcode,
+                    self.mask,
+                    self.fin,
+                    self.rsv1,
+                    self.rsv2,
+                    self.rsv3,
+                    self.amount_spec,
+                    self.amount,
+                )
+        elif payloads_masked:
+            def _make_frame(payload: bytes):
+                return Frame(
+                    Frame(payload, mask=self.mask).masked_payload(),
+                    self.opcode,
+                    self.mask,
+                    self.fin,
+                    self.rsv1,
+                    self.rsv2,
+                    self.rsv3,
+                    self.amount_spec,
+                    self.amount,
+                )
+        else:
+            def _make_frame(payload: bytes):
+                return Frame(
+                    payload,
+                    self.opcode,
+                    self.mask,
+                    self.fin,
+                    self.rsv1,
+                    self.rsv2,
+                    self.rsv3,
+                    self.amount_spec,
+                    self.amount,
+                )
+        self._make_frame_ = _make_frame
+
+
 class FrameFactory:
+
     @staticmethod
     def TextDataFrame(message: bytes, mask: bytes | None = None, fragment: Literal["first", "continue", "final"] | None = None) -> Frame:
         if fragment == "first":
