@@ -1,6 +1,8 @@
 name: Make release
 
-on: push
+on:
+  release:
+    types: [created]
 
 jobs:
   sdist:
