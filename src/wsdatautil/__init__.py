@@ -21,7 +21,7 @@ from uuid import uuid4
 from . import _wsframecoder
 
 
-__version__ = "1.0"
+__version__ = "1.1"
 
 
 def _make_accept_key(b64key: bytes):
@@ -382,7 +382,7 @@ class ProgressiveStreamReader:
             mask,
             amount
         ) = _wsframecoder.read_header_continuation(continuation_data, self.amount_spec, self.masked)
-        self.mask = mask
+        self.mask = mask if self.masked else None
         self.amount = amount
         return self.amount
 
