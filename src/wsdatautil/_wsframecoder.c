@@ -411,13 +411,18 @@ static PyObject * read_header_continuation(PyObject *self, PyObject *args) {
     
     uint64_t amount;
 
+    // xo
     if (i_amount_spec == 126) {
-        amount =  (uint64_t)_input[2];
+        amount =  (uint64_t)_input[0];
         amount <<= 8;
-        amount |= (uint64_t)_input[3];
+        amount |= (uint64_t)_input[1];
         _header_size += 2;
     } else if (i_amount_spec == 127) {
-        amount =  (uint64_t)_input[2];
+        amount =  (uint64_t)_input[0];
+        amount <<= 8;
+        amount |= (uint64_t)_input[1];
+        amount <<= 8;
+        amount |= (uint64_t)_input[2];
         amount <<= 8;
         amount |= (uint64_t)_input[3];
         amount <<= 8;
@@ -428,10 +433,6 @@ static PyObject * read_header_continuation(PyObject *self, PyObject *args) {
         amount |= (uint64_t)_input[6];
         amount <<= 8;
         amount |= (uint64_t)_input[7];
-        amount <<= 8;
-        amount |= (uint64_t)_input[8];
-        amount <<= 8;
-        amount |= (uint64_t)_input[9];
         _header_size += 8;
     } else {
         amount = i_amount_spec;

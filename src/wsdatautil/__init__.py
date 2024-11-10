@@ -3,11 +3,11 @@ The WsDataUtil is a lightweight, highly compatible Python module for processing 
 The parsing, building and masking of WebSocket frames is implemented in C to increase performance.
 
 The core of the module is the ``Frame`` and the ``StreamReader`` object as an interface to the C api.
-This serves as the result value from parsing and as the parameter for building a WebSocket frame.
-A frame is not checked for plausibility or according to the specification RFC6455.
+``Frame`` serves as the result value from parsing and as the parameter for building a WebSocket frame.
+A ``Frame`` is not checked for plausibility or according to the specification RFC6455.
 This should be implemented later if required.
 
-For the sake of completeness, the <HandshakeRequest> object is available.
+For the sake of completeness, the ``HandshakeRequest`` object is available.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from uuid import uuid4
 from . import _wsframecoder
 
 
-__version__ = "0.2"
+__version__ = "1.0"
 
 
 def _make_accept_key(b64key: bytes):
